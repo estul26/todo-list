@@ -93,10 +93,17 @@ jobs:
           cd ~/todo-list
           echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
           docker compose -f docker-compose.prod.yml pull
-          docker compose -f docker-compose.prod.yml up -d
+          docker compose -f docker-compose.prod.yml up -d --wait
           docker image prune -f
           REMOTE
 
       - name: Smoke check
         run: |
-          curl --fail --show-error --silent "http://${{ secrets.VPS_HOST }}:8081/api/auth/status" > /dev/null
+          for attempt in {1..30}; do
+            if curl --fail --show-error --silent "http://${{ secrets.VPS_HOST }}:8081/api/auth/status" > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+
+          curl --fail --show-error "http://${{ secrets.VPS_HOST }}:8081/api/auth/status"
