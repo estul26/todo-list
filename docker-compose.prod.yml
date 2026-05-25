@@ -1,0 +1,16 @@
+services:
+  todo-list:
+    image: ${TODO_IMAGE:?TODO_IMAGE is required}
+    container_name: todo-list
+    restart: unless-stopped
+    ports:
+      - "8081:3000"
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DB_PATH: /app/data/todos.sqlite
+    volumes:
+      - todo-list-data:/app/data
+
+volumes:
+  todo-list-data:
