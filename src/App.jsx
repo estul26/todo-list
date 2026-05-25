@@ -16,18 +16,73 @@ function formatCount(count, label) {
   return `${count} ${label}${count === 1 ? '' : 's'}`;
 }
 
+function getTodayDate() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function formatDueDate(dueDate) {
+  if (!dueDate) return 'No date';
+  const [year, month, day] = dueDate.split('-').map(Number);
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  }).format(new Date(year, month - 1, day));
+}
+
 export function getVisibleTodos(todos, filter) {
   if (filter === 'active') return todos.filter((todo) => !todo.completed);
   if (filter === 'completed') return todos.filter((todo) => todo.completed);
   return todos;
 }
 
+export function getGroupedTodos(todos, today = getTodayDate()) {
+  const groups = [
+    { key: 'overdue', title: 'Overdue', todos: [] },
+    { key: 'today', title: 'Today', todos: [] },
+    { key: 'upcoming', title: 'Upcoming', todos: [] },
+    { key: 'no-date', title: 'No date', todos: [] }
+  ];
+  const byKey = Object.fromEntries(groups.map((group) => [group.key, group]));
+
+  for (const todo of todos) {
+    if (!todo.dueDate) {
+      byKey['no-date'].todos.push(todo);
+    } else if (todo.dueDate < today) {
+      byKey.overdue.todos.push(todo);
+    } else if (todo.dueDate === today) {
+      byKey.today.todos.push(todo);
+    } else {
+      byKey.upcoming.todos.push(todo);
+    }
+  }
+
+  const byDueDateThenCreated = (left, right) => (
+    left.dueDate.localeCompare(right.dueDate)
+    || right.createdAt.localeCompare(left.createdAt)
+  );
+  const byCreatedDesc = (left, right) => right.createdAt.localeCompare(left.createdAt);
+
+  byKey.overdue.todos.sort(byDueDateThenCreated);
+  byKey.today.todos.sort(byCreatedDesc);
+  byKey.upcoming.todos.sort(byDueDateThenCreated);
+  byKey['no-date'].todos.sort(byCreatedDesc);
+
+  return groups.filter((group) => group.todos.length);
+}
+
 export function App() {
   const [todos, setTodos] = useState([]);
   const [newTitle, setNewTitle] = useState('');
+  const [newDueDate, setNewDueDate] = useState('');
   const [filter, setFilter] = useState('all');
   const [editingId, setEditingId] = useState(null);
   const [editingTitle, setEditingTitle] = useState('');
+  const [editingDueDate, setEditingDueDate] = useState('');
   const [loading, setLoading] = useState(true);
   const [authLoading, setAuthLoading] = useState(true);
   const [authEnabled, setAuthEnabled] = useState(false);
@@ -70,6 +125,7 @@ export function App() {
   const activeCount = useMemo(() => todos.filter((todo) => !todo.completed).length, [todos]);
   const completedCount = todos.length - activeCount;
   const visibleTodos = getVisibleTodos(todos, filter);
+  const groupedTodos = getGroupedTodos(visibleTodos);
 
   async function runAction(action) {
     setSaving(true);
@@ -86,11 +142,13 @@ export function App() {
   function beginEdit(todo) {
     setEditingId(todo.id);
     setEditingTitle(todo.title);
+    setEditingDueDate(todo.dueDate || '');
   }
 
   function cancelEdit() {
     setEditingId(null);
     setEditingTitle('');
+    setEditingDueDate('');
   }
 
   async function handleLogin(event) {
@@ -122,9 +180,10 @@ export function App() {
     if (!title) return;
 
     await runAction(async () => {
-      const todo = await createTodo(title);
+      const todo = await createTodo(title, newDueDate || null);
       setTodos((current) => [todo, ...current]);
       setNewTitle('');
+      setNewDueDate('');
     });
   }
 
@@ -140,7 +199,7 @@ export function App() {
     if (!title) return;
 
     await runAction(async () => {
-      const updated = await updateTodo(todo.id, { title });
+      const updated = await updateTodo(todo.id, { title, dueDate: editingDueDate || null });
       setTodos((current) => current.map((item) => (item.id === updated.id ? updated : item)));
       cancelEdit();
     });
@@ -229,6 +288,15 @@ export function App() {
             placeholder="Add a task"
             disabled={saving}
           />
+          <label className="sr-only" htmlFor="new-due-date">Due date</label>
+          <input
+            id="new-due-date"
+            className="date-input"
+            value={newDueDate}
+            onChange={(event) => setNewDueDate(event.target.value)}
+            type="date"
+            disabled={saving}
+          />
           <button type="submit" disabled={saving || !newTitle.trim()}>
             Add
           </button>
@@ -266,44 +334,61 @@ export function App() {
 
         {loading ? (
           <div className="empty-state">Loading tasks...</div>
-        ) : visibleTodos.length ? (
-          <ul className="todo-list">
-            {visibleTodos.map((todo) => (
-              <li key={todo.id} className={todo.completed ? 'completed' : ''}>
-                <input
-                  className="check"
-                  aria-label={`Mark ${todo.title} ${todo.completed ? 'active' : 'completed'}`}
-                  type="checkbox"
-                  checked={todo.completed}
-                  onChange={() => handleToggle(todo)}
-                  disabled={saving}
-                />
+        ) : groupedTodos.length ? (
+          <div className="todo-groups">
+            {groupedTodos.map((group) => (
+              <section className="todo-group" key={group.key} aria-labelledby={`${group.key}-heading`}>
+                <h2 id={`${group.key}-heading`}>{group.title}</h2>
+                <ul className="todo-list">
+                  {group.todos.map((todo) => (
+                    <li key={todo.id} className={todo.completed ? 'completed' : ''}>
+                      <input
+                        className="check"
+                        aria-label={`Mark ${todo.title} ${todo.completed ? 'active' : 'completed'}`}
+                        type="checkbox"
+                        checked={todo.completed}
+                        onChange={() => handleToggle(todo)}
+                        disabled={saving}
+                      />
 
-                {editingId === todo.id ? (
-                  <form className="edit-form" onSubmit={(event) => {
-                    event.preventDefault();
-                    handleSaveEdit(todo);
-                  }}>
-                    <input
-                      value={editingTitle}
-                      onChange={(event) => setEditingTitle(event.target.value)}
-                      autoFocus
-                    />
-                    <button type="submit" disabled={saving || !editingTitle.trim()}>Save</button>
-                    <button type="button" onClick={cancelEdit}>Cancel</button>
-                  </form>
-                ) : (
-                  <>
-                    <span className="todo-title">{todo.title}</span>
-                    <div className="todo-actions">
-                      <button type="button" onClick={() => beginEdit(todo)}>Edit</button>
-                      <button type="button" onClick={() => handleDelete(todo.id)}>Delete</button>
-                    </div>
-                  </>
-                )}
-              </li>
+                      {editingId === todo.id ? (
+                        <form className="edit-form" onSubmit={(event) => {
+                          event.preventDefault();
+                          handleSaveEdit(todo);
+                        }}>
+                          <input
+                            value={editingTitle}
+                            onChange={(event) => setEditingTitle(event.target.value)}
+                            autoFocus
+                          />
+                          <input
+                            className="date-input"
+                            value={editingDueDate}
+                            onChange={(event) => setEditingDueDate(event.target.value)}
+                            type="date"
+                            aria-label="Due date"
+                          />
+                          <button type="submit" disabled={saving || !editingTitle.trim()}>Save</button>
+                          <button type="button" onClick={cancelEdit}>Cancel</button>
+                        </form>
+                      ) : (
+                        <>
+                          <div className="todo-content">
+                            <span className="todo-title">{todo.title}</span>
+                            <span className="due-date">{formatDueDate(todo.dueDate)}</span>
+                          </div>
+                          <div className="todo-actions">
+                            <button type="button" onClick={() => beginEdit(todo)}>Edit</button>
+                            <button type="button" onClick={() => handleDelete(todo.id)}>Delete</button>
+                          </div>
+                        </>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </section>
             ))}
-          </ul>
+          </div>
         ) : (
           <div className="empty-state">
             {filter === 'all' ? 'No tasks yet.' : `No ${filter} tasks.`}

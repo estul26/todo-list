@@ -11,6 +11,9 @@ changed. When `TODO_PASSWORD` is not set, the app runs without a login gate for
 local development. If the app is served over HTTPS, set `COOKIE_SECURE=true` so
 the login cookie is HTTPS-only.
 
+Todos can include an optional due date. Dated tasks are grouped by overdue,
+today, and upcoming dates, while tasks without a date stay in a separate group.
+
 ## Local development
 
 ```sh

@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
 import { createServer } from 'node:http';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import Database from 'better-sqlite3';
 import { createApp } from './app.js';
 import { createTodoStore } from './db.js';
 
@@ -36,25 +40,28 @@ describe('todo API', () => {
   it('creates, lists, updates, and deletes todos', async () => {
     const created = await request('/api/todos', {
       method: 'POST',
-      body: JSON.stringify({ title: '  Ship app  ' })
+      body: JSON.stringify({ title: '  Ship app  ', dueDate: '2026-05-25' })
     });
 
     assert.equal(created.status, 201);
     assert.equal(created.body.todo.title, 'Ship app');
     assert.equal(created.body.todo.completed, false);
+    assert.equal(created.body.todo.dueDate, '2026-05-25');
 
     const listed = await request('/api/todos');
     assert.equal(listed.status, 200);
     assert.equal(listed.body.todos.length, 1);
+    assert.equal(listed.body.todos[0].dueDate, '2026-05-25');
 
     const updated = await request(`/api/todos/${created.body.todo.id}`, {
       method: 'PATCH',
-      body: JSON.stringify({ completed: true, title: 'Ship polished app' })
+      body: JSON.stringify({ completed: true, title: 'Ship polished app', dueDate: null })
     });
 
     assert.equal(updated.status, 200);
     assert.equal(updated.body.todo.completed, true);
     assert.equal(updated.body.todo.title, 'Ship polished app');
+    assert.equal(updated.body.todo.dueDate, null);
 
     const deleted = await request(`/api/todos/${created.body.todo.id}`, { method: 'DELETE' });
     assert.equal(deleted.status, 204);
@@ -73,6 +80,32 @@ describe('todo API', () => {
       body: JSON.stringify({ completed: true })
     });
     assert.equal(missing.status, 404);
+  });
+
+  it('validates due dates', async () => {
+    const invalid = await request('/api/todos', {
+      method: 'POST',
+      body: JSON.stringify({ title: 'Bad date', dueDate: '2026-99-99' })
+    });
+    assert.equal(invalid.status, 400);
+    assert.equal(invalid.body.error, 'Due date must be a valid date.');
+
+    const created = await request('/api/todos', {
+      method: 'POST',
+      body: JSON.stringify({ title: 'Good date', dueDate: '' })
+    });
+    assert.equal(created.status, 201);
+    assert.equal(created.body.todo.dueDate, null);
+
+    const badUpdate = await request(`/api/todos/${created.body.todo.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ dueDate: 'tomorrow' })
+    });
+    assert.equal(badUpdate.status, 400);
+    assert.equal(badUpdate.body.error, 'Due date must be a valid date.');
+
+    const deleted = await request(`/api/todos/${created.body.todo.id}`, { method: 'DELETE' });
+    assert.equal(deleted.status, 204);
   });
 
   it('clears completed todos', async () => {
@@ -96,6 +129,37 @@ describe('todo API', () => {
     const listed = await request('/api/todos');
     assert.equal(listed.body.todos.length, 1);
     assert.equal(listed.body.todos[0].title, 'Active task');
+  });
+});
+
+describe('todo store migration', () => {
+  it('adds due dates to existing todo databases', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'todo-list-test-'));
+    const dbPath = path.join(dir, 'todos.sqlite');
+    const db = new Database(dbPath);
+
+    db.exec(`
+      CREATE TABLE todos (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        completed INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      INSERT INTO todos (id, title, completed, created_at, updated_at)
+      VALUES ('old-id', 'Old task', 0, '2026-05-24T12:00:00.000Z', '2026-05-24T12:00:00.000Z');
+    `);
+    db.close();
+
+    const store = createTodoStore(dbPath);
+    const todos = store.list();
+
+    assert.equal(todos.length, 1);
+    assert.equal(todos[0].title, 'Old task');
+    assert.equal(todos[0].dueDate, null);
+
+    store.close();
+    fs.rmSync(dir, { recursive: true, force: true });
   });
 });
 

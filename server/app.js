@@ -11,6 +11,18 @@ function normalizeTitle(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+function normalizeDueDate(value) {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value !== 'string') return undefined;
+
+  const trimmed = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return undefined;
+
+  const date = new Date(`${trimmed}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return date.toISOString().slice(0, 10) === trimmed ? trimmed : undefined;
+}
+
 function jsonError(res, status, error) {
   return res.status(status).json({ error });
 }
@@ -122,7 +134,10 @@ export function createApp({
     const title = normalizeTitle(req.body?.title);
     if (!title) return jsonError(res, 400, 'Title is required.');
 
-    res.status(201).json({ todo: store.create(title) });
+    const dueDate = normalizeDueDate(req.body?.dueDate);
+    if (dueDate === undefined) return jsonError(res, 400, 'Due date must be a valid date.');
+
+    res.status(201).json({ todo: store.create(title, dueDate) });
   });
 
   app.patch('/api/todos/:id', (req, res) => {
@@ -139,6 +154,12 @@ export function createApp({
         return jsonError(res, 400, 'Completed must be a boolean.');
       }
       changes.completed = req.body.completed;
+    }
+
+    if (Object.hasOwn(req.body ?? {}, 'dueDate')) {
+      const dueDate = normalizeDueDate(req.body.dueDate);
+      if (dueDate === undefined) return jsonError(res, 400, 'Due date must be a valid date.');
+      changes.dueDate = dueDate;
     }
 
     if (!Object.keys(changes).length) {

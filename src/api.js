@@ -30,11 +30,11 @@ export async function logout() {
   await parseResponse(await fetch('/api/auth/logout', { method: 'POST' }));
 }
 
-export async function createTodo(title) {
+export async function createTodo(title, dueDate = null) {
   const data = await parseResponse(await fetch('/api/todos', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title })
+    body: JSON.stringify({ title, dueDate })
   }));
   return data.todo;
 }
