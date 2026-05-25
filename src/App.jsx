@@ -34,6 +34,56 @@ function formatDueDate(dueDate) {
   }).format(new Date(year, month - 1, day));
 }
 
+function addDays(dateValue, days) {
+  const [year, month, day] = dateValue.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days));
+  return date.toISOString().slice(0, 10);
+}
+
+function formatCalendarDate(dateValue) {
+  return dateValue.replaceAll('-', '');
+}
+
+function escapeCalendarText(value) {
+  return value
+    .replaceAll('\\', '\\\\')
+    .replaceAll(';', '\\;')
+    .replaceAll(',', '\\,')
+    .replaceAll('\n', '\\n');
+}
+
+function downloadCalendarEvent(todo) {
+  if (!todo.dueDate) return;
+
+  const eventStart = formatCalendarDate(todo.dueDate);
+  const eventEnd = formatCalendarDate(addDays(todo.dueDate, 1));
+  const timestamp = new Date().toISOString().replaceAll(/[-:]/g, '').split('.')[0] + 'Z';
+  const filename = `${todo.title.trim().toLowerCase().replaceAll(/[^a-z0-9]+/g, '-') || 'todo'}.ics`;
+  const calendarText = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Todo List//Todo Calendar//EN',
+    'BEGIN:VEVENT',
+    `UID:todo-${todo.id}@todo-list`,
+    `DTSTAMP:${timestamp}`,
+    `DTSTART;VALUE=DATE:${eventStart}`,
+    `DTEND;VALUE=DATE:${eventEnd}`,
+    `SUMMARY:${escapeCalendarText(todo.title)}`,
+    'END:VEVENT',
+    'END:VCALENDAR'
+  ].join('\r\n');
+
+  const blob = new Blob([calendarText], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 export function getVisibleTodos(todos, filter) {
   if (filter === 'active') return todos.filter((todo) => !todo.completed);
   if (filter === 'completed') return todos.filter((todo) => todo.completed);
@@ -378,6 +428,14 @@ export function App() {
                             <span className="due-date">{formatDueDate(todo.dueDate)}</span>
                           </div>
                           <div className="todo-actions">
+                            <button
+                              type="button"
+                              onClick={() => downloadCalendarEvent(todo)}
+                              disabled={!todo.dueDate}
+                              title={todo.dueDate ? 'Download calendar event' : 'Add a due date first'}
+                            >
+                              Calendar
+                            </button>
                             <button type="button" onClick={() => beginEdit(todo)}>Edit</button>
                             <button type="button" onClick={() => handleDelete(todo.id)}>Delete</button>
                           </div>

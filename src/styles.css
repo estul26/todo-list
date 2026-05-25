@@ -267,7 +267,9 @@ h1 {
 
 .todo-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
+  justify-content: flex-end;
 }
 
 .edit-form {
@@ -324,5 +326,6 @@ h1 {
 
   .todo-actions {
     grid-column: 2;
+    justify-content: flex-start;
   }
 }
