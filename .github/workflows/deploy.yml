@@ -79,15 +79,18 @@ jobs:
         shell: bash
         env:
           TODO_IMAGE: ${{ steps.image.outputs.latest }}
+          TODO_PASSWORD: ${{ secrets.TODO_PASSWORD }}
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          printf 'TODO_IMAGE=%s\nTODO_PASSWORD=%s\n' "$TODO_IMAGE" "$TODO_PASSWORD" | \
+            ssh -i ~/.ssh/deploy_key -p "${{ secrets.VPS_PORT }}" "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" "cat > ~/todo-list/.env"
+
           ssh -i ~/.ssh/deploy_key -p "${{ secrets.VPS_PORT }}" "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
-            "TODO_IMAGE='${TODO_IMAGE}' GHCR_USER='${GHCR_USER}' GHCR_TOKEN='${GHCR_TOKEN}' bash -s" <<'REMOTE'
+            "GHCR_USER='${GHCR_USER}' GHCR_TOKEN='${GHCR_TOKEN}' bash -s" <<'REMOTE'
           set -euo pipefail
 
           cd ~/todo-list
-          printf 'TODO_IMAGE=%s\n' "$TODO_IMAGE" > .env
           echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
           docker compose -f docker-compose.prod.yml pull
           docker compose -f docker-compose.prod.yml up -d
@@ -96,4 +99,4 @@ jobs:
 
       - name: Smoke check
         run: |
-          curl --fail --show-error --silent "http://${{ secrets.VPS_HOST }}:8081/api/todos" > /dev/null
+          curl --fail --show-error --silent "http://${{ secrets.VPS_HOST }}:8081/api/auth/status" > /dev/null

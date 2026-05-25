@@ -3,7 +3,10 @@ import {
   clearCompletedTodos,
   createTodo,
   deleteTodo,
+  getAuthStatus,
   listTodos,
+  login,
+  logout,
   updateTodo
 } from './api.js';
 
@@ -26,24 +29,39 @@ export function App() {
   const [editingId, setEditingId] = useState(null);
   const [editingTitle, setEditingTitle] = useState('');
   const [loading, setLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authEnabled, setAuthEnabled] = useState(false);
+  const [authenticated, setAuthenticated] = useState(false);
+  const [password, setPassword] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let ignore = false;
 
-    async function loadTodos() {
+    async function load() {
       try {
-        const loaded = await listTodos();
-        if (!ignore) setTodos(loaded);
+        const status = await getAuthStatus();
+        if (ignore) return;
+
+        setAuthEnabled(status.enabled);
+        setAuthenticated(status.authenticated);
+
+        if (status.authenticated) {
+          const loaded = await listTodos();
+          if (!ignore) setTodos(loaded);
+        }
       } catch (err) {
         if (!ignore) setError(err.message);
       } finally {
-        if (!ignore) setLoading(false);
+        if (!ignore) {
+          setAuthLoading(false);
+          setLoading(false);
+        }
       }
     }
 
-    loadTodos();
+    load();
     return () => {
       ignore = true;
     };
@@ -73,6 +91,29 @@ export function App() {
   function cancelEdit() {
     setEditingId(null);
     setEditingTitle('');
+  }
+
+  async function handleLogin(event) {
+    event.preventDefault();
+    const enteredPassword = password.trim();
+    if (!enteredPassword) return;
+
+    await runAction(async () => {
+      await login(enteredPassword);
+      const loaded = await listTodos();
+      setTodos(loaded);
+      setAuthenticated(true);
+      setPassword('');
+    });
+  }
+
+  async function handleLogout() {
+    await runAction(async () => {
+      await logout();
+      setAuthenticated(false);
+      setTodos([]);
+      cancelEdit();
+    });
   }
 
   async function handleAdd(event) {
@@ -119,6 +160,48 @@ export function App() {
     });
   }
 
+  if (authLoading) {
+    return (
+      <main className="app-shell">
+        <section className="todo-panel" aria-labelledby="app-title">
+          <div className="empty-state">Loading...</div>
+        </section>
+      </main>
+    );
+  }
+
+  if (authEnabled && !authenticated) {
+    return (
+      <main className="app-shell">
+        <section className="todo-panel login-panel" aria-labelledby="login-title">
+          <header className="app-header">
+            <div>
+              <p className="eyebrow">Private</p>
+              <h1 id="login-title">Todo List</h1>
+            </div>
+          </header>
+
+          <form className="login-form" onSubmit={handleLogin}>
+            <label htmlFor="password">Password</label>
+            <input
+              id="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              type="password"
+              autoComplete="current-password"
+              disabled={saving}
+            />
+            <button type="submit" disabled={saving || !password.trim()}>
+              Log in
+            </button>
+          </form>
+
+          {error ? <div className="error-banner" role="alert">{error}</div> : null}
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="app-shell">
       <section className="todo-panel" aria-labelledby="app-title">
@@ -130,6 +213,11 @@ export function App() {
           <div className="count-pill" aria-label={formatCount(activeCount, 'active task')}>
             {activeCount}
           </div>
+          {authEnabled ? (
+            <button className="logout-button" type="button" onClick={handleLogout} disabled={saving}>
+              Log out
+            </button>
+          ) : null}
         </header>
 
         <form className="add-form" onSubmit={handleAdd}>

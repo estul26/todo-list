@@ -9,6 +9,7 @@ services:
       NODE_ENV: production
       PORT: "3000"
       DB_PATH: /app/data/todos.sqlite
+      TODO_PASSWORD: ${TODO_PASSWORD:?TODO_PASSWORD is required}
     volumes:
       - todo-list-data:/app/data
 

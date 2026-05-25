@@ -2,6 +2,15 @@
 
 A container-ready todo list webapp built with React, Express, and SQLite.
 
+This app is intended for single-owner, private use. It has one global todo list
+stored in SQLite and does not include accounts, roles, registration, sharing, or
+collaboration features.
+
+Set `TODO_PASSWORD` to require a password before the todo list can be viewed or
+changed. When `TODO_PASSWORD` is not set, the app runs without a login gate for
+local development. If the app is served over HTTPS, set `COOKIE_SECURE=true` so
+the login cookie is HTTPS-only.
+
 ## Local development
 
 ```sh
@@ -15,10 +24,11 @@ The frontend runs at http://localhost:5173 and proxies API calls to the backend 
 
 ```sh
 npm run build
-npm start
+TODO_PASSWORD="choose-a-password" npm start
 ```
 
-The server listens on `PORT` and stores data in `DB_PATH`, defaulting to `data/todos.sqlite`.
+The server listens on `PORT` and stores data in `DB_PATH`, defaulting to
+`data/todos.sqlite`.
 
 ## Docker
 
@@ -37,6 +47,7 @@ Add these repository secrets in GitHub:
 - `VPS_HOST`: VPS hostname or IP address
 - `VPS_PORT`: SSH port
 - `VPS_USER`: SSH username
+- `TODO_PASSWORD`: password required to open and use the todo list
 
 The VPS must have Docker and Docker Compose v2 installed, and `VPS_USER` must be able to run Docker commands without an interactive sudo prompt.
 

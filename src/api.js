@@ -14,6 +14,22 @@ export async function listTodos() {
   return data.todos;
 }
 
+export async function getAuthStatus() {
+  return parseResponse(await fetch('/api/auth/status'));
+}
+
+export async function login(password) {
+  return parseResponse(await fetch('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password })
+  }));
+}
+
+export async function logout() {
+  await parseResponse(await fetch('/api/auth/logout', { method: 'POST' }));
+}
+
 export async function createTodo(title) {
   const data = await parseResponse(await fetch('/api/todos', {
     method: 'POST',
