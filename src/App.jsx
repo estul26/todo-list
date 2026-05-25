@@ -34,14 +34,10 @@ function formatDueDate(dueDate) {
   }).format(new Date(year, month - 1, day));
 }
 
-function addDays(dateValue, days) {
+function formatCalendarDateTime(dateValue, hour) {
   const [year, month, day] = dateValue.split('-').map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day + days));
-  return date.toISOString().slice(0, 10);
-}
-
-function formatCalendarDate(dateValue) {
-  return dateValue.replaceAll('-', '');
+  const date = new Date(year, month - 1, day, hour);
+  return date.toISOString().replaceAll(/[-:]/g, '').split('.')[0] + 'Z';
 }
 
 function escapeCalendarText(value) {
@@ -55,8 +51,8 @@ function escapeCalendarText(value) {
 function downloadCalendarEvent(todo) {
   if (!todo.dueDate) return;
 
-  const eventStart = formatCalendarDate(todo.dueDate);
-  const eventEnd = formatCalendarDate(addDays(todo.dueDate, 1));
+  const eventStart = formatCalendarDateTime(todo.dueDate, 9);
+  const eventEnd = formatCalendarDateTime(todo.dueDate, 10);
   const timestamp = new Date().toISOString().replaceAll(/[-:]/g, '').split('.')[0] + 'Z';
   const filename = `${todo.title.trim().toLowerCase().replaceAll(/[^a-z0-9]+/g, '-') || 'todo'}.ics`;
   const calendarText = [
@@ -66,8 +62,8 @@ function downloadCalendarEvent(todo) {
     'BEGIN:VEVENT',
     `UID:todo-${todo.id}@todo-list`,
     `DTSTAMP:${timestamp}`,
-    `DTSTART;VALUE=DATE:${eventStart}`,
-    `DTEND;VALUE=DATE:${eventEnd}`,
+    `DTSTART:${eventStart}`,
+    `DTEND:${eventEnd}`,
     `SUMMARY:${escapeCalendarText(todo.title)}`,
     'END:VEVENT',
     'END:VCALENDAR'
